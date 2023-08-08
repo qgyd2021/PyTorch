@@ -6,7 +6,11 @@ import os
 import pickle
 import platform
 import random
+import sys
 from typing import Any, Callable, Dict, Iterable, List, Union
+
+pwd = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(pwd, '../../../'))
 
 import numpy as np
 import torch
@@ -26,7 +30,7 @@ from toolbox.torch.utils.data.vocabulary import Vocabulary
 
 def get_args():
     """
-    python3 3.test_model.py --weights_file data_dir/serialization_dir/model_state_9.th --src_vocab_pkl data_dir/vocab_de.pkl --tgt_vocab_pkl data_dir/vocab_en.pkl
+    python3 3.test_model.py --weights_file data_dir/serialization_dir/model_state_9.th --vocabulary_dir data_dir/vocabulary
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights_file", default="serialization_dir/model_state_1.th", type=str)
