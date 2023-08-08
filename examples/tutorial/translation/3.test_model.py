@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 def get_args():
     """
-    python3 3.test_model.py --weights_file data_dir/serialization_dir/model_state_7.th --src_vocab_pkl data_dir/vocab_de.pkl --tgt_vocab_pkl data_dir/vocab_en.pkl
+    python3 3.test_model.py --weights_file data_dir/serialization_dir/model_state_9.th --src_vocab_pkl data_dir/vocab_de.pkl --tgt_vocab_pkl data_dir/vocab_en.pkl
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights_file", default="serialization_dir/model_state_1.th", type=str)
@@ -296,13 +296,13 @@ def main():
     )
 
     model = Seq2SeqTransformer(
-        num_encoder_layers=3,
-        num_decoder_layers=3,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
         emb_size=512,
         num_head=8,
         src_vocab_size=len(src_vocab),
         tgt_vocab_size=len(tgt_vocab),
-        dim_feedforward=512,
+        dim_feedforward=1024,
     )
 
     with open(args.weights_file, "rb") as f:
