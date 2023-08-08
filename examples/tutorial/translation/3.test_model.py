@@ -160,6 +160,7 @@ class CollateFunction(object):
                  src_vocab: Vocab,
                  tgt_vocab: Vocab,
                  bos_idx: int,
+                 eos_idx: int,
                  pad_idx: int,
                  ):
         self.src_tokenizer = src_tokenizer
@@ -167,6 +168,7 @@ class CollateFunction(object):
         self.src_vocab = src_vocab
         self.tgt_vocab = tgt_vocab
         self.bos_idx = bos_idx
+        self.eos_idx = eos_idx
         self.pad_idx = pad_idx
 
     @staticmethod
@@ -196,7 +198,7 @@ class CollateFunction(object):
                 tensors=(
                     torch.tensor([self.bos_idx]),
                     torch.tensor(src_token_ids),
-                    torch.tensor([self.pad_idx])
+                    torch.tensor([self.eos_idx])
                 )
             )
 
@@ -206,7 +208,7 @@ class CollateFunction(object):
                 tensors=(
                     torch.tensor([self.bos_idx]),
                     torch.tensor(tgt_token_ids),
-                    torch.tensor([self.pad_idx])
+                    torch.tensor([self.eos_idx])
                 )
             )
 
@@ -303,6 +305,7 @@ def main():
         src_vocab=src_vocab,
         tgt_vocab=tgt_vocab,
         bos_idx=bos_idx,
+        eos_idx=eos_idx,
         pad_idx=pad_idx,
     )
 
