@@ -333,6 +333,8 @@ class Trainer(object):
         self.state = TrainerState()
 
         for epoch_idx in range(self.args.num_train_epochs):
+            self.state.epoch_idx = epoch_idx
+
             self.training_epoch(epoch_idx)
             self.evaluation_epoch(epoch_idx)
             self._save_checkpoint()
@@ -520,7 +522,10 @@ def main():
             nn.init.xavier_uniform_(p)
 
     loss_fn = torch.nn.CrossEntropyLoss(ignore_index=pad_idx)
-    optimizer = torch.optim.Adam(transformer.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
+    optimizer = torch.optim.Adam(
+        transformer.parameters(),
+        lr=args.learning_rate, betas=(0.9, 0.98), eps=1e-9
+    )
     lr_scheduler = StepLR(
         optimizer=optimizer,
         step_size=args.lr_scheduler_step_size,
