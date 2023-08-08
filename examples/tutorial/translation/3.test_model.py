@@ -23,16 +23,8 @@ from tqdm import tqdm
 
 def get_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--multi30k_train_url",
-        default="https://raw.githubusercontent.com/neychev/small_DL_repo/master/datasets/Multi30k/training.tar.gz",
-        type=str
-    )
-    parser.add_argument(
-        "--multi30k_valid_url",
-        default="https://raw.githubusercontent.com/neychev/small_DL_repo/master/datasets/Multi30k/validation.tar.gz",
-        type=str
-    )
+    parser.add_argument("--weights_file", default="serialization_dir/model_state_1.th", type=str)
+
     parser.add_argument("--src_language", default="de", type=str)
     parser.add_argument("--tgt_language", default="en", type=str)
 
@@ -44,24 +36,9 @@ def get_args():
     parser.add_argument("--src_vocab_pkl", default="vocab_de.pkl", type=str)
     parser.add_argument("--tgt_vocab_pkl", default="vocab_en.pkl", type=str)
 
-    parser.add_argument("--learning_rate", default=1e-3, type=float)
-    parser.add_argument("--epochs", default=200, type=int)
-    parser.add_argument("--batch_size", default=64, type=int)
-    parser.add_argument("--keep_most_recent_by_count", default=10, type=int)
-    parser.add_argument("--patience", default=-1, type=int)
-    parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
-
-    parser.add_argument("--lr_scheduler_step_size", default=50, type=int)
-    parser.add_argument("--lr_scheduler_gamma", default=0.5, type=float)
-
     parser.add_argument("--seed", default=3407, type=str, help="https://arxiv.org/abs/2109.08203")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str)
     parser.add_argument("--device_id", default=0, type=int)
-
-    parser.add_argument("--rank", default=0, type=int)
-    parser.add_argument("--world_size", default=1, type=int)
-    parser.add_argument("--ddp_backend", default="gloo", type=str)
-    parser.add_argument("--ddp_timeout", default=1800, type=int)
 
     args = parser.parse_args()
     return args
@@ -314,7 +291,7 @@ def main():
         pad_idx=pad_idx,
     )
 
-    transformer = Seq2SeqTransformer(
+    model = Seq2SeqTransformer(
         num_encoder_layers=3,
         num_decoder_layers=3,
         emb_size=512,
@@ -324,10 +301,15 @@ def main():
         dim_feedforward=512,
     )
 
-    text = "hello, what's your name ?"
+    with open(args.weights_file, "rb") as f:
+        state_dict = torch.load(f, map_location="cpu")
+
+    model.load_state_dict(state_dict=state_dict, strict=True)
+    model.eval()
+
     sample = {
-        "src": text,
-        "tgt": text,
+        "src": "Hallo, wie heißt du?",
+        "tgt": "hello, what's your name ?",
     }
     inputs, _ = collate_fn.__call__(batch=[sample])
 
@@ -337,7 +319,7 @@ def main():
     num_tokens = src.shape[0]
 
     tgt_tokens = greedy_decode(
-        model=transformer,
+        model=model,
         src=src,
         src_mask=src_mask,
         max_len=num_tokens + 5,

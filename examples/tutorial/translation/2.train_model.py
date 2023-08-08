@@ -4,8 +4,11 @@
 https://pytorch.org/tutorials/beginner/translation_transformer.html
 """
 import argparse
+from dataclasses import asdict, dataclass, field, fields
+import json
 import math
 import os
+from pathlib import Path
 import pickle
 import platform
 import random
@@ -255,19 +258,41 @@ class CollateFunction(object):
         return inputs, tgt_out
 
 
+@dataclass
+class TrainingArguments(object):
+    serialization_dir: str = field(
+        metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
+    )
+    num_train_epochs: int = field(default=3, metadata={"help": "Total number of training epochs to perform."})
+    seed: int = field(default=42, metadata={"help": "Random seed that will be set at the beginning of training."})
+    keep_most_recent_by_count: int = field(default=10, metadata={"help": "how many checkpoint to keep."})
+
+
+@dataclass
+class TrainerState(object):
+    epoch_idx: int = 0
+    global_step: int = 0
+
+    best_epoch: int = -1
+    best_validation_loss: float = float("inf")
+
+    training_loss: float = float("inf")
+    validation_loss: float = float("inf")
+
+
 class Trainer(object):
     def __init__(self,
                  model: nn.Module,
+                 args: TrainingArguments,
                  train_dataloader: DataLoader,
                  valid_dataloader: DataLoader,
-                 # compute_metrics: Callable,
                  loss_fn: Callable,
                  optimizer: torch.optim.Optimizer,
                  lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
-                 max_epoch: int = 200,
                  device=None
                  ):
         self.model = model
+        self.args = args
         self.train_dataloader = train_dataloader
         self.valid_dataloader = valid_dataloader
 
@@ -275,8 +300,17 @@ class Trainer(object):
         self.optimizer = optimizer
         self.lr_scheduler = lr_scheduler
 
-        self.max_epoch = max_epoch
+        # save checkpoint
+        self.model_state_filename_list = list()
+        self.training_state_filename_list = list()
+
+        self.serialization_dir = Path(args.serialization_dir)
+        self.serialization_dir.mkdir(exist_ok=True)
+
         self.device = device
+
+        # global params
+        self.state: TrainerState = None
 
     def _prepare_input(self, data: Union[torch.Tensor, Any]) -> Union[torch.Tensor, Any]:
         if isinstance(data, dict):
@@ -296,9 +330,13 @@ class Trainer(object):
     def train(self):
         self.model.to(self.device)
 
-        for epoch_idx in range(self.max_epoch):
+        self.state = TrainerState()
+
+        for epoch_idx in range(self.args.num_train_epochs):
             self.training_epoch(epoch_idx)
             self.evaluation_epoch(epoch_idx)
+            self._save_checkpoint()
+            self._save_metrics()
 
         return
 
@@ -307,9 +345,9 @@ class Trainer(object):
         training_total_loss: float = 0.0
         training_total_steps: int = 0
 
+        self.model.train()
         progress_bar = tqdm(self.train_dataloader, desc='Epoch={} (train)'.format(epoch_idx), leave=True)
         for step, batch in enumerate(progress_bar):
-            self.model.train()
             inputs, targets = batch
             loss, _ = self.training_step(inputs, targets)
 
@@ -322,7 +360,8 @@ class Trainer(object):
             }
             progress_bar.set_postfix(**progress_bar_postfix)
 
-        return
+        training_loss: float = training_total_loss / training_total_steps
+        self.state.training_loss = training_loss
 
     def training_step(self,
                       inputs: Dict[str, torch.Tensor],
@@ -347,6 +386,7 @@ class Trainer(object):
         validation_total_loss: float = 0.0
         validation_total_steps: int = 0
 
+        self.model.eval()
         progress_bar = tqdm(self.valid_dataloader, desc='Epoch={} (valid)'.format(epoch_idx), leave=True)
         for step, batch in enumerate(progress_bar):
             self.model.train()
@@ -362,7 +402,8 @@ class Trainer(object):
             }
             progress_bar.set_postfix(**progress_bar_postfix)
 
-        return
+        validation_loss: float = validation_total_loss / validation_total_steps
+        self.state.validation_loss = validation_loss
 
     def prediction_step(self,
                         inputs: Dict[str, torch.Tensor],
@@ -376,6 +417,37 @@ class Trainer(object):
             loss = self.loss_fn(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
 
         return loss, logits
+
+    def _save_checkpoint(self):
+        # keep most recent by count
+        if len(self.model_state_filename_list) >= self.args.keep_most_recent_by_count > 0:
+            model_state_filename_ = self.model_state_filename_list.pop(0)
+            os.remove(model_state_filename_)
+            training_state_filename_ = self.training_state_filename_list.pop(0)
+            os.remove(training_state_filename_)
+        model_state_filename = self.serialization_dir / "model_state_{}.th".format(self.state.epoch_idx)
+        training_state_filename = self.serialization_dir / "training_state_{}.th".format(self.state.epoch_idx)
+        self.model_state_filename_list.append(model_state_filename.as_posix())
+        with open(model_state_filename.as_posix(), "wb") as f:
+            torch.save(self.model.state_dict(), f)
+        self.training_state_filename_list.append(training_state_filename.as_posix())
+        with open(training_state_filename.as_posix(), "wb") as f:
+            torch.save(self.optimizer.state_dict(), f)
+
+    def _save_metrics(self):
+        # metrics epoch
+        metrics = {
+            "best_epoch": self.state.best_epoch,
+            "epoch": self.state.epoch_idx,
+
+            "training_loss": self.state.training_loss,
+            "validation_loss": self.state.validation_loss,
+
+            "best_validation_loss": self.state.best_validation_loss,
+        }
+        metrics_epoch_filename = self.serialization_dir / "metrics_epoch_{}.json".format(self.state.epoch_idx)
+        with open(metrics_epoch_filename, "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=4, ensure_ascii=False)
 
 
 def main():
@@ -453,8 +525,15 @@ def main():
         gamma=args.lr_scheduler_gamma
     )
 
+    training_args = TrainingArguments(
+        serialization_dir=args.serialization_dir,
+        num_train_epochs=10,
+        seed=args.seed,
+        keep_most_recent_by_count=args.keep_most_recent_by_count,
+    )
     trainer = Trainer(
         model=transformer,
+        args=training_args,
         train_dataloader=train_dataloader,
         valid_dataloader=valid_dataloader,
         loss_fn=loss_fn,
