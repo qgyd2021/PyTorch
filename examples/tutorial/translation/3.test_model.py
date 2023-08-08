@@ -22,6 +22,9 @@ from tqdm import tqdm
 
 
 def get_args():
+    """
+    python3 3.test_model.py --weights_file data_dir/serialization_dir/model_state_7.th --src_vocab_pkl data_dir/vocab_de.pkl --tgt_vocab_pkl data_dir/vocab_en.pkl
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights_file", default="serialization_dir/model_state_1.th", type=str)
 
@@ -263,7 +266,8 @@ def greedy_decode(model, src, src_mask, max_len, start_symbol, eos_idx, device):
 def main():
     args = get_args()
 
-    device = torch.device("{}:{}".format(args.device, args.device_id))
+    # device = torch.device("{}:{}".format(args.device, args.device_id))
+    device = "cpu"
 
     unk_idx = 0
     pad_idx = 1
