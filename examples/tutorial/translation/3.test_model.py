@@ -296,13 +296,13 @@ def main():
     )
 
     model = Seq2SeqTransformer(
-        num_encoder_layers=6,
-        num_decoder_layers=6,
+        num_encoder_layers=3,
+        num_decoder_layers=3,
         emb_size=512,
         num_head=8,
         src_vocab_size=len(src_vocab),
         tgt_vocab_size=len(tgt_vocab),
-        dim_feedforward=1024,
+        dim_feedforward=512,
     )
 
     with open(args.weights_file, "rb") as f:

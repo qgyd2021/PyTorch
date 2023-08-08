@@ -50,15 +50,15 @@ def get_args():
     parser.add_argument("--src_vocab_pkl", default="vocab_de.pkl", type=str)
     parser.add_argument("--tgt_vocab_pkl", default="vocab_en.pkl", type=str)
 
-    parser.add_argument("--learning_rate", default=1e-3, type=float)
+    parser.add_argument("--learning_rate", default=1e-4, type=float)
     parser.add_argument("--num_train_epochs", default=200, type=int)
     parser.add_argument("--batch_size", default=64, type=int)
     parser.add_argument("--keep_most_recent_by_count", default=10, type=int)
     parser.add_argument("--patience", default=-1, type=int)
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
 
-    parser.add_argument("--lr_scheduler_step_size", default=5000, type=int)
-    parser.add_argument("--lr_scheduler_gamma", default=0.5, type=float)
+    parser.add_argument("--lr_scheduler_step_size", default=500000, type=int)
+    parser.add_argument("--lr_scheduler_gamma", default=1.0, type=float)
 
     parser.add_argument("--seed", default=3407, type=str, help="https://arxiv.org/abs/2109.08203")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str)
@@ -508,13 +508,13 @@ def main():
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
 
     transformer = Seq2SeqTransformer(
-        num_encoder_layers=6,
-        num_decoder_layers=6,
+        num_encoder_layers=3,
+        num_decoder_layers=3,
         emb_size=512,
         num_head=8,
         src_vocab_size=len(src_vocab),
         tgt_vocab_size=len(tgt_vocab),
-        dim_feedforward=1024,
+        dim_feedforward=512,
     )
 
     for p in transformer.parameters():
