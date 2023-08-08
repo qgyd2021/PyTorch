@@ -368,6 +368,7 @@ class Trainer(object):
                       targets: torch.Tensor
                       ) -> torch.Tensor:
         inputs = self._prepare_inputs(inputs)
+        targets = targets.to(self.device)
 
         logits = self.model.forward(**inputs)
 
@@ -410,6 +411,7 @@ class Trainer(object):
                         targets: torch.Tensor
                         ) -> torch.Tensor:
         inputs = self._prepare_inputs(inputs)
+        targets = targets.to(self.device)
 
         with torch.no_grad():
             logits = self.model.forward(**inputs)
