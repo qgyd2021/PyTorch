@@ -511,7 +511,7 @@ def main():
         num_encoder_layers=6,
         num_decoder_layers=6,
         emb_size=512,
-        num_head=12,
+        num_head=8,
         src_vocab_size=len(src_vocab),
         tgt_vocab_size=len(tgt_vocab),
         dim_feedforward=1024,
