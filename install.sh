@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+# sh install.sh --system_version centos --stage 1 --stop_stage 1
 
 system_version="centos";
 verbose=true;
