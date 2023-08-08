@@ -95,6 +95,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
 
   python3 2.train_model.py \
   --src_vocab_pkl "${data_dir}/vocab_de.pkl" \
-  --tgt_vocab_pkl "${data_dir}/vocab_en.pkl"
+  --tgt_vocab_pkl "${data_dir}/vocab_en.pkl" \
+  --serialization_dir "${data_dir}/serialization_dir"
 
 fi
