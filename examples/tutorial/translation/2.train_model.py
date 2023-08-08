@@ -508,13 +508,13 @@ def main():
     valid_dataloader = DataLoader(valid_dataset, batch_size=args.batch_size, collate_fn=collate_fn)
 
     transformer = Seq2SeqTransformer(
-        num_encoder_layers=3,
-        num_decoder_layers=3,
+        num_encoder_layers=6,
+        num_decoder_layers=6,
         emb_size=512,
-        num_head=8,
+        num_head=12,
         src_vocab_size=len(src_vocab),
         tgt_vocab_size=len(tgt_vocab),
-        dim_feedforward=512,
+        dim_feedforward=1024,
     )
 
     for p in transformer.parameters():
