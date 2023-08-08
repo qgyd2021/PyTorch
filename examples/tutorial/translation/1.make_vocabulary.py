@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-"""
-https://pytorch.org/tutorials/beginner/translation_transformer.html
-"""
 import argparse
+from collections import Counter
 import pickle
 from typing import Any, Dict, Iterable, List
 
@@ -11,6 +9,8 @@ import torch
 from torchtext.data.utils import get_tokenizer
 from torchtext.datasets import multi30k, Multi30k
 from torchtext.vocab import build_vocab_from_iterator, Vocab
+
+from toolbox.torch.utils.data.vocabulary import Vocabulary
 
 
 def get_args():
@@ -33,21 +33,10 @@ def get_args():
     parser.add_argument("--tgt_tokenizer_name", default="spacy", type=str)
     parser.add_argument("--tgt_tokenizer_language", default="en_core_web_sm", type=str)
 
-    parser.add_argument("--src_vocab_pkl", default="vocab_de.pkl", type=str)
-    parser.add_argument("--tgt_vocab_pkl", default="vocab_en.pkl", type=str)
+    parser.add_argument("--vocabulary_dir", default="./vocabulary", type=str)
 
     args = parser.parse_args()
     return args
-
-
-def multi30k_text_to_tokens(
-    data_iter: Iterable,
-    language: str,
-    language_index: Dict[str, int],
-    language_to_tokenizer: Dict[str, Any]
-) -> List[str]:
-    for data_sample in data_iter:
-        yield language_to_tokenizer[language](data_sample[language_index[language]])
 
 
 def main():
@@ -56,10 +45,8 @@ def main():
     multi30k.URL["train"] = args.multi30k_train_url
     multi30k.URL["valid"] = args.multi30k_valid_url
 
-    language_to_tokenizer = {
-        args.src_language: get_tokenizer(args.src_tokenizer_name, language=args.src_tokenizer_language),
-        args.tgt_language: get_tokenizer(args.tgt_tokenizer_name, language=args.tgt_tokenizer_language),
-    }
+    src_tokenizer = get_tokenizer(args.src_tokenizer_name, language=args.src_tokenizer_language)
+    tgt_tokenizer = get_tokenizer(args.tgt_tokenizer_name, language=args.tgt_tokenizer_language)
 
     unk_idx = 0
     pad_idx = 1
@@ -67,7 +54,6 @@ def main():
     eos_idx = 3
     special_symbols = ["<unk>", "<pad>", "<bos>", "<eos>"]
 
-    # src
     train_dataset_iter = Multi30k(
         split="train",
         language_pair=(
@@ -76,54 +62,35 @@ def main():
         )
     )
 
-    vocab: Vocab = build_vocab_from_iterator(
-        multi30k_text_to_tokens(
-            train_dataset_iter,
-            language=args.src_language,
-            language_index={
-                args.src_language: 0,
-                args.tgt_language: 1,
-            },
-            language_to_tokenizer=language_to_tokenizer
-        ),
-        min_freq=1,
-        specials=special_symbols,
-        special_first=True,
+    src_token_counter = Counter()
+    tgt_token_counter = Counter()
+    for sample in train_dataset_iter:
+        src_sample, tgt_sample = sample
+        src_tokens = src_tokenizer(src_sample)
+        tgt_tokens = tgt_tokenizer(tgt_sample)
+        src_token_counter.update(src_tokens)
+        tgt_token_counter.update(tgt_tokens)
+
+    src_token_counter = list(sorted(src_token_counter.items(), key=lambda x: x[1], reverse=True))
+    tgt_token_counter = list(sorted(tgt_token_counter.items(), key=lambda x: x[1], reverse=True))
+
+    vocabulary = Vocabulary(
+        non_padded_namespaces=["src_tokens", "tgt_tokens"],
+        padding_token="<pad>",
+        oov_token="<unk>"
     )
+    for special_symbol in special_symbols:
+        vocabulary.add_token_to_namespace(special_symbol, namespace="src_tokens")
 
-    vocab.set_default_index(unk_idx)
+    for token, freq in src_token_counter:
+        vocabulary.add_token_to_namespace(token, namespace="src_tokens")
 
-    with open(args.src_vocab_pkl, "wb") as f:
-        pickle.dump(vocab.vocab, f)
+    for special_symbol in special_symbols:
+        vocabulary.add_token_to_namespace(special_symbol, namespace="tgt_tokens")
+    for token, freq in tgt_token_counter:
+        vocabulary.add_token_to_namespace(token, namespace="tgt_tokens")
 
-    # tgt
-    train_dataset_iter = Multi30k(
-        split="train",
-        language_pair=(
-            args.src_language,
-            args.tgt_language,
-        )
-    )
-
-    vocab: Vocab = build_vocab_from_iterator(
-        multi30k_text_to_tokens(
-            train_dataset_iter,
-            language=args.tgt_language,
-            language_index={
-                args.src_language: 0,
-                args.tgt_language: 1,
-            },
-            language_to_tokenizer=language_to_tokenizer
-        ),
-        min_freq=1,
-        specials=special_symbols,
-        special_first=True,
-    )
-
-    vocab.set_default_index(unk_idx)
-
-    with open(args.tgt_vocab_pkl, "wb") as f:
-        pickle.dump(vocab.vocab, f)
+    vocabulary.save_to_files(args.vocabulary_dir)
 
     return
 

@@ -24,7 +24,10 @@ from torch.utils.data.dataloader import DataLoader
 from torchtext.data.utils import get_tokenizer
 from torchtext.datasets import multi30k, Multi30k
 from torchtext.vocab import build_vocab_from_iterator, Vocab
+from torchtext._torchtext import Vocab as VocabPybind
 from tqdm import tqdm
+
+from toolbox.torch.utils.data.vocabulary import Vocabulary
 
 
 def get_args():
@@ -47,8 +50,7 @@ def get_args():
     parser.add_argument("--tgt_tokenizer_name", default="spacy", type=str)
     parser.add_argument("--tgt_tokenizer_language", default="en_core_web_sm", type=str)
 
-    parser.add_argument("--src_vocab_pkl", default="vocab_de.pkl", type=str)
-    parser.add_argument("--tgt_vocab_pkl", default="vocab_en.pkl", type=str)
+    parser.add_argument("--vocabulary_dir", default="./vocabulary", type=str)
 
     parser.add_argument("--learning_rate", default=1e-4, type=float)
     parser.add_argument("--num_train_epochs", default=200, type=int)
@@ -464,6 +466,8 @@ def main():
     device = torch.device("{}:{}".format(args.device, args.device_id))
     n_gpu = torch.cuda.device_count()
 
+    vocabulary = Vocabulary.from_files(args.vocabulary_dir)
+
     unk_idx = 0
     pad_idx = 1
     bos_idx = 2
@@ -473,13 +477,17 @@ def main():
     multi30k.URL["train"] = args.multi30k_train_url
     multi30k.URL["valid"] = args.multi30k_valid_url
 
-    with open(args.src_vocab_pkl, "rb") as f:
-        src_vocab = pickle.load(f)
-    src_vocab = Vocab(src_vocab)
+    src_token_to_index = vocabulary.get_token_to_index_vocabulary(namespace="src_tokens")
+    src_token_to_index = list(sorted(src_token_to_index.items(), key=lambda x: x[1], reverse=False))
+    src_tokens = [k for k, v in src_token_to_index]
+    src_vocab = Vocab(VocabPybind(src_tokens, None))
+    src_vocab.set_default_index(unk_idx)
 
-    with open(args.tgt_vocab_pkl, "rb") as f:
-        tgt_vocab = pickle.load(f)
-    tgt_vocab = Vocab(tgt_vocab)
+    tgt_token_to_index = vocabulary.get_token_to_index_vocabulary(namespace="tgt_tokens")
+    tgt_token_to_index = list(sorted(tgt_token_to_index.items(), key=lambda x: x[1], reverse=False))
+    tgt_tokens = [k for k, v in tgt_token_to_index]
+    tgt_vocab = Vocab(VocabPybind(tgt_tokens, None))
+    tgt_vocab.set_default_index(unk_idx)
 
     src_tokenizer = get_tokenizer(args.src_tokenizer_name, language=args.src_tokenizer_language)
     tgt_tokenizer = get_tokenizer(args.tgt_tokenizer_name, language=args.tgt_tokenizer_language)
