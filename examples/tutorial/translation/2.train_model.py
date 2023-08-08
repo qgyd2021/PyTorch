@@ -51,7 +51,7 @@ def get_args():
     parser.add_argument("--tgt_vocab_pkl", default="vocab_en.pkl", type=str)
 
     parser.add_argument("--learning_rate", default=1e-3, type=float)
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--num_train_epochs", default=200, type=int)
     parser.add_argument("--batch_size", default=64, type=int)
     parser.add_argument("--keep_most_recent_by_count", default=10, type=int)
     parser.add_argument("--patience", default=-1, type=int)
@@ -534,7 +534,7 @@ def main():
 
     training_args = TrainingArguments(
         serialization_dir=args.serialization_dir,
-        num_train_epochs=10,
+        num_train_epochs=args.num_train_epochs,
         seed=args.seed,
         keep_most_recent_by_count=args.keep_most_recent_by_count,
     )
