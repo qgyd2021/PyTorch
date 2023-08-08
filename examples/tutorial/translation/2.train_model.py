@@ -57,7 +57,7 @@ def get_args():
     parser.add_argument("--patience", default=-1, type=int)
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
 
-    parser.add_argument("--lr_scheduler_step_size", default=50, type=int)
+    parser.add_argument("--lr_scheduler_step_size", default=5000, type=int)
     parser.add_argument("--lr_scheduler_gamma", default=0.5, type=float)
 
     parser.add_argument("--seed", default=3407, type=str, help="https://arxiv.org/abs/2109.08203")
