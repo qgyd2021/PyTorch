@@ -2,6 +2,10 @@
 
 
 system_version="centos";
+verbose=true;
+stage=0 # start from 0 if you need to start from data preparation
+stop_stage=5
+
 python_version=3.8.10
 
 # parse options
@@ -38,14 +42,24 @@ work_dir="$(pwd)"
 
 if [ $system_version == "centos" ]; then
 
-  yum install -y git-lfs
+  #yum install -y git-lfs
+  if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
+    $verbose && echo "stage 0: install python"
 
-  cd "${work_dir}" || exit 1;
-  sh ./script/install_python.sh --system_version "centos" --python_version "${python_version}"
+    cd "${work_dir}" || exit 1;
+    sh ./script/install_python.sh --system_version "centos" --python_version "${python_version}"
+  fi
 
-  /usr/local/python-${python_version}/bin/pip3 install virtualenv==23.0.1
-  mkdir -p /data/local/bin
-  cd /data/local/bin || exit 1;
-  # source /data/local/bin/PyTorch/bin/activate
-  /usr/local/python-${python_version}/bin/virtualenv PyTorch
+  if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
+    $verbose && echo "stage 1: make virtualenv"
+
+    cd "${work_dir}" || exit 1;
+
+    /usr/local/python-${python_version}/bin/python3.8 -m pip install --upgrade pip
+    mkdir -p /data/local/bin
+    cd /data/local/bin || exit 1;
+    # source /data/local/bin/PyTorch/bin/activate
+    /usr/local/python-${python_version}/bin/virtualenv PyTorch
+  fi
+
 fi
