@@ -79,3 +79,22 @@ if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
 
 fi
 
+
+if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
+  $verbose && echo "stage 0: make vocabulary"
+
+  python3 1.make_vocabulary.py \
+  --src_vocab_pkl "${data_dir}/vocab_de.pkl" \
+  --tgt_vocab_pkl "${data_dir}/vocab_en.pkl"
+
+fi
+
+
+if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
+  $verbose && echo "stage 1: train model"
+
+  python3 2.train_model.py \
+  --src_vocab_pkl "${data_dir}/vocab_de.pkl" \
+  --tgt_vocab_pkl "${data_dir}/vocab_en.pkl"
+
+fi

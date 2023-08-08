@@ -47,8 +47,6 @@ def get_args():
     parser.add_argument("--src_vocab_pkl", default="vocab_de.pkl", type=str)
     parser.add_argument("--tgt_vocab_pkl", default="vocab_en.pkl", type=str)
 
-    parser.add_argument("--vocabulary_dir", default="./vocabulary", type=str)
-
     parser.add_argument("--learning_rate", default=1e-3, type=float)
     parser.add_argument("--epochs", default=200, type=int)
     parser.add_argument("--batch_size", default=64, type=int)
@@ -170,27 +168,6 @@ class Seq2SeqTransformer(nn.Module):
             tgt_mask
         )
         return tgt_out
-
-
-def generate_square_subsequent_mask(sz):
-    mask = torch.triu(torch.ones(size=(sz, sz)) == 1).transpose(0, 1)
-    mask = mask.float().masked_fill(mask == 0, float("-inf")).masked_fill(mask == 1, float(0.0))
-    return mask
-
-
-def create_mask(src: torch.Tensor,
-                tgt: torch.Tensor,
-                pad_idx: int,
-                ):
-    src_seq_len = src.shape[0]
-    tgt_seq_len = tgt.shape[0]
-
-    tgt_mask = generate_square_subsequent_mask(tgt_seq_len)
-    src_mask = torch.zeros((src_seq_len, src_seq_len)).type(torch.bool)
-
-    src_padding_mask = (src == pad_idx).transpose(0, 1)
-    tgt_padding_mask = (tgt == pad_idx).transpose(0, 1)
-    return src_mask, tgt_mask, src_padding_mask, tgt_padding_mask
 
 
 class CollateFunction(object):
