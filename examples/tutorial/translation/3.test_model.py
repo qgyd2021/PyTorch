@@ -323,8 +323,8 @@ def main():
     model.eval()
 
     sample = {
-        "src": "Hallo, wie heißt du?",
-        "tgt": "hello, what's your name ?",
+        "src": "Zwei junge weiße Männer sind im Freien in der Nähe vieler Büsche.",
+        "tgt": "Two young, White males are outside near many bushes.",
     }
     inputs, _ = collate_fn.__call__(batch=[sample])
 
