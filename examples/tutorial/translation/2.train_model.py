@@ -52,9 +52,9 @@ def get_args():
 
     parser.add_argument("--vocabulary_dir", default="./vocabulary", type=str)
 
-    parser.add_argument("--learning_rate", default=1e-4, type=float)
+    parser.add_argument("--learning_rate", default=2e-5, type=float)
     parser.add_argument("--num_train_epochs", default=200, type=int)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=128, type=int)
     parser.add_argument("--keep_most_recent_by_count", default=10, type=int)
     parser.add_argument("--patience", default=-1, type=int)
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
