@@ -64,8 +64,10 @@ elif [ $system_version == "ubuntu" ]; then
   alias python3='/data/local/bin/PyTorch/bin/python3'
 fi
 
+
 if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
   $verbose && echo "stage -1: download spacy model"
+  cd "${work_dir}" || exit 1;
 
   python3 -m spacy download en_core_web_sm
   python3 -m spacy download de_core_news_sm
@@ -75,6 +77,7 @@ fi
 
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
   $verbose && echo "stage 0: make vocabulary"
+  cd "${work_dir}" || exit 1;
 
   python3 1.make_vocabulary.py \
   --vocabulary_dir "${vocabulary_dir}" \
@@ -84,6 +87,7 @@ fi
 
 if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
   $verbose && echo "stage 1: train model"
+  cd "${work_dir}" || exit 1;
 
   python3 2.train_model.py \
   --vocabulary_dir "${vocabulary_dir}" \

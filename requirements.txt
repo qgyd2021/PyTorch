@@ -10,3 +10,4 @@ spacy==3.6.0
 portalocker==2.7.0
 portalocker==2.7.0
 urllib3==1.26.16
+overrides==7.4.0
