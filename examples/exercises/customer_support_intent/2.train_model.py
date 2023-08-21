@@ -87,7 +87,7 @@ class CollateFunction(object):
             label = example[self.label_field]
             texts.append(text)
 
-            label_idx = self.vocabulary.get_token_index(token=label)
+            label_idx = self.vocabulary.get_token_index(token=label, namespace="labels")
             targets.append(label_idx)
 
         encodings = self.tokenizer.__call__(
@@ -159,7 +159,8 @@ def main():
     )
 
     model = BertForSequenceClassification.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_dir
+        pretrained_model_name_or_path=args.pretrained_model_dir,
+        num_labels=vocabulary.get_vocab_size(namespace="labels")
     )
     model.to(device)
 

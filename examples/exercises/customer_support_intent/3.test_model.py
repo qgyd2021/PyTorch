@@ -93,7 +93,8 @@ def main():
     )
 
     model = BertForSequenceClassification.from_pretrained(
-        pretrained_model_name_or_path=args.pretrained_model_dir
+        pretrained_model_name_or_path=args.pretrained_model_dir,
+        num_labels=vocabulary.get_vocab_size(namespace="labels")
     )
     model.to(device)
 
