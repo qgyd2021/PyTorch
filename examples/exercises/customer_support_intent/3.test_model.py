@@ -9,6 +9,7 @@ from typing import List
 
 import numpy as np
 import torch
+from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.bert.modeling_bert import BertForSequenceClassification
 from transformers.models.bert.tokenization_bert import BertTokenizer
 
@@ -112,7 +113,8 @@ def main():
     inputs = inputs.to(device)
 
     with torch.no_grad():
-        logits = model.forward(inputs)
+        seq_cls_output: SequenceClassifierOutput = model.forward(inputs)
+        logits = seq_cls_output.logits
         probs = torch.softmax(logits, dim=-1)
         label_idx = torch.argmax(probs, dim=-1)
         label_idx = label_idx.detach().cpu().numpy().tolist()

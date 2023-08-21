@@ -21,6 +21,7 @@ from torch.optim.lr_scheduler import StepLR
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
+from transformers.modeling_outputs import SequenceClassifierOutput
 from transformers.models.bert.modeling_bert import BertForSequenceClassification
 from transformers.models.bert.tokenization_bert import BertTokenizer
 
@@ -195,7 +196,8 @@ def main():
             inputs = inputs.to(device)
             targets: torch.LongTensor = targets.to(device).long()
 
-            logits = model.forward(inputs)
+            seq_cls_output: SequenceClassifierOutput = model.forward(inputs)
+            logits = seq_cls_output.logits
 
             loss: torch.Tensor = loss_fn.forward(logits, targets)
             loss.backward()
@@ -235,7 +237,8 @@ def main():
                 inputs = inputs.to(device)
                 targets: torch.LongTensor = targets.to(device).long()
 
-                logits = model.forward(inputs)
+                seq_cls_output: SequenceClassifierOutput = model.forward(inputs)
+                logits = seq_cls_output.logits
 
                 loss: torch.Tensor = loss_fn.forward(logits, targets)
 
