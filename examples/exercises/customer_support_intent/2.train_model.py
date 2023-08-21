@@ -115,7 +115,9 @@ def main():
     dataset = load_dataset(
         path=args.dataset_path,
         name=args.dataset_name,
+        cache_dir=args.dataset_cache_dir
     )
+    print(dataset)
 
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_dir)
 
@@ -123,27 +125,10 @@ def main():
         tokenizer=tokenizer,
     )
 
-    train_sampler = DistributedSampler(
-        dataset=dataset["train"],
-        num_replicas=args.world_size,
-        rank=args.rank,
-        shuffle=True,
-        seed=args.seed,
-        drop_last=False,
-    )
-    valid_sampler = DistributedSampler(
-        dataset=dataset["validation"],
-        num_replicas=args.world_size,
-        rank=args.rank,
-        shuffle=False,
-        seed=args.seed,
-        drop_last=False,
-    )
     train_dataloader = DataLoader(
         dataset["train"],
         batch_size=args.batch_size,
-        shuffle=False,
-        sampler=train_sampler,
+        shuffle=True,
         num_workers=0 if platform.system() == "Windows" else os.cpu_count(),
         collate_fn=collate_fn,
         pin_memory=False,
@@ -153,7 +138,6 @@ def main():
         dataset["validation"],
         batch_size=args.batch_size,
         shuffle=False,
-        sampler=valid_sampler,
         num_workers=0 if platform.system() == "Windows" else os.cpu_count(),
         collate_fn=collate_fn,
         pin_memory=False,
