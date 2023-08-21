@@ -10,6 +10,8 @@ verbose=true;
 stage=0 # start from 0 if you need to start from data preparation
 stop_stage=5
 
+pretrained_bert_model_name=bert-base-uncased
+
 
 # parse options
 while true; do
@@ -44,11 +46,11 @@ $verbose && echo "system_version: ${system_version}"
 
 work_dir="$(pwd)"
 data_dir="$(pwd)/data_dir"
+pretrained_models_dir="${work_dir}/../../pretrained_models";
 
 mkdir -p "${data_dir}"
+mkdir -p "${pretrained_models_dir}"
 
-train_subset="${data_dir}/train.jsonl"
-valid_subset="${data_dir}/valid.jsonl"
 vocabulary_dir="${data_dir}/vocabulary"
 serialization_dir="${data_dir}/serialization_dir"
 
@@ -62,4 +64,49 @@ elif [ $system_version == "centos" ]; then
 elif [ $system_version == "ubuntu" ]; then
   source /data/local/bin/PyTorch/bin/activate
   alias python3='/data/local/bin/PyTorch/bin/python3'
+fi
+
+
+declare -A pretrained_bert_model_dict
+pretrained_bert_model_dict=(
+  ["chinese-bert-wwm-ext"]="https://huggingface.co/hfl/chinese-bert-wwm-ext"
+  ["bert-base-uncased"]="https://huggingface.co/bert-base-uncased"
+  ["bert-base-japanese"]="https://huggingface.co/cl-tohoku/bert-base-japanese"
+  ["bert-base-vietnamese-uncased"]="https://huggingface.co/trituenhantaoio/bert-base-vietnamese-uncased"
+
+)
+pretrained_model_dir="${pretrained_models_dir}/${pretrained_bert_model_name}"
+
+
+if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
+  $verbose && echo "stage 0: make vocabulary"
+  cd "${work_dir}" || exit 1;
+
+  python3 1.make_vocabulary.py \
+  --pretrained_model_dir "${pretrained_model_dir}" \
+  --vocabulary_dir "${vocabulary_dir}" \
+
+fi
+
+
+if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
+  $verbose && echo "stage 1: train model"
+  cd "${work_dir}" || exit 1;
+
+  python 2.train_model.py \
+  --serialization_dir "${serialization_dir}" \
+  --vocabulary_dir "${vocabulary_dir}" \
+
+fi
+
+
+if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
+  $verbose && echo "stage 2: test model"
+  cd "${work_dir}" || exit 1;
+
+  python3 3.test_model.py \
+  --vocabulary_dir "${vocabulary_dir}" \
+  --weights_file "${serialization_dir}/best.th" \
+  --pretrained_model_dir "${pretrained_model_dir}" \
+
 fi
