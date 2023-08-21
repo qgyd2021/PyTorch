@@ -46,7 +46,7 @@ $verbose && echo "system_version: ${system_version}"
 
 work_dir="$(pwd)"
 data_dir="$(pwd)/data_dir"
-pretrained_models_dir="${work_dir}/../../pretrained_models";
+pretrained_models_dir="${work_dir}/../../../pretrained_models";
 
 mkdir -p "${data_dir}"
 mkdir -p "${pretrained_models_dir}"
@@ -73,7 +73,6 @@ pretrained_bert_model_dict=(
   ["bert-base-uncased"]="https://huggingface.co/bert-base-uncased"
   ["bert-base-japanese"]="https://huggingface.co/cl-tohoku/bert-base-japanese"
   ["bert-base-vietnamese-uncased"]="https://huggingface.co/trituenhantaoio/bert-base-vietnamese-uncased"
-
 )
 pretrained_model_dir="${pretrained_models_dir}/${pretrained_bert_model_name}"
 
@@ -111,8 +110,9 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
   cd "${work_dir}" || exit 1;
 
   python 2.train_model.py \
-  --serialization_dir "${serialization_dir}" \
+  --pretrained_model_dir "${pretrained_model_dir}" \
   --vocabulary_dir "${vocabulary_dir}" \
+  --serialization_dir "${serialization_dir}" \
 
 fi
 
@@ -122,8 +122,8 @@ if [ ${stage} -le 2 ] && [ ${stop_stage} -ge 2 ]; then
   cd "${work_dir}" || exit 1;
 
   python3 3.test_model.py \
+  --pretrained_model_dir "${pretrained_model_dir}" \
   --vocabulary_dir "${vocabulary_dir}" \
   --weights_file "${serialization_dir}/best.th" \
-  --pretrained_model_dir "${pretrained_model_dir}" \
 
 fi

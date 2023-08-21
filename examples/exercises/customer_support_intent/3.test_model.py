@@ -20,14 +20,16 @@ def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--text", default="i didnt feel humiliated", type=str)
 
-    parser.add_argument("--vocabulary_dir", default="vocabulary", type=str)
-    parser.add_argument("--weights_file", default="serialization_dir/best.th", type=str)
-
     parser.add_argument(
         "--pretrained_model_dir",
         default=(project_path / "pretrained_models/chinese-bert-wwm-ext").as_posix(),
         type=str
     )
+    parser.add_argument("--vocabulary_dir", default="vocabulary", type=str)
+    parser.add_argument("--weights_file", default="serialization_dir/best.th", type=str)
+
+    parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str)
+    parser.add_argument("--device_id", default=0, type=int)
 
     args = parser.parse_args()
     return args
