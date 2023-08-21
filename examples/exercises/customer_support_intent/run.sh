@@ -2,6 +2,7 @@
 
 # nohup sh run.sh --stage -1 --stop_stage 2 --system_version centos &
 
+# sh run.sh --stage 1 --stop_stage 2 --system_version centos
 # sh run.sh --system_version windows --stage -1 --stop_stage -1
 
 # params

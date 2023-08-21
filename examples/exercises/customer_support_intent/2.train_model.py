@@ -68,10 +68,12 @@ def get_args():
 
 class CollateFunction(object):
     def __init__(self,
+                 vocabulary: Vocabulary,
                  tokenizer: BertTokenizer,
                  text_field: str = "text",
                  label_field: str = "label"
                  ):
+        self.vocabulary = vocabulary
         self.tokenizer = tokenizer
         self.text_field = text_field
         self.label_field = label_field
@@ -83,7 +85,9 @@ class CollateFunction(object):
             text = example[self.text_field]
             label = example[self.label_field]
             texts.append(text)
-            targets.append(label)
+
+            label_idx = self.vocabulary.get_token_index(token=label)
+            targets.append(label_idx)
 
         encodings = self.tokenizer.__call__(
             text=texts,
@@ -128,6 +132,7 @@ def main():
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_dir)
 
     collate_fn = CollateFunction(
+        vocabulary=vocabulary,
         tokenizer=tokenizer,
         text_field="utterance",
         label_field="intent"
