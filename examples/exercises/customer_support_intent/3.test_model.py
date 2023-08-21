@@ -100,7 +100,6 @@ def main():
 
     with open(args.weights_file, "rb") as f:
         state_dict = torch.load(f, map_location="cpu")
-        state_dict = {".".join(k.split(".")[1:]): v for k, v in state_dict.items()}
 
     model.load_state_dict(state_dict=state_dict, strict=True)
     model.eval()
