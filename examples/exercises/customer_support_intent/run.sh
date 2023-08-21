@@ -78,6 +78,23 @@ pretrained_bert_model_dict=(
 pretrained_model_dir="${pretrained_models_dir}/${pretrained_bert_model_name}"
 
 
+if [ ${stage} -le -1 ] && [ ${stop_stage} -ge -1 ]; then
+  $verbose && echo "stage -1: download pretrained model"
+
+  if [ ! -d "${pretrained_model_dir}" ]; then
+    mkdir -p "${pretrained_models_dir}"
+    cd "${pretrained_models_dir}" || exit 1;
+
+    repository_url="${pretrained_bert_model_dict[${pretrained_bert_model_name}]}"
+    git clone "${repository_url}"
+
+    cd "${pretrained_model_dir}" || exit 1;
+    rm flax_model.msgpack && rm pytorch_model.bin && rm tf_model.h5
+    wget "${repository_url}/resolve/main/pytorch_model.bin"
+  fi
+fi
+
+
 if [ ${stage} -le 0 ] && [ ${stop_stage} -ge 0 ]; then
   $verbose && echo "stage 0: make vocabulary"
   cd "${work_dir}" || exit 1;
