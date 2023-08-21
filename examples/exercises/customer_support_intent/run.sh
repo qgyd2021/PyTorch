@@ -11,6 +11,7 @@ stage=0 # start from 0 if you need to start from data preparation
 stop_stage=5
 
 pretrained_bert_model_name=bert-base-uncased
+patience=3
 
 
 # parse options
@@ -113,6 +114,7 @@ if [ ${stage} -le 1 ] && [ ${stop_stage} -ge 1 ]; then
   --pretrained_model_dir "${pretrained_model_dir}" \
   --vocabulary_dir "${vocabulary_dir}" \
   --serialization_dir "${serialization_dir}" \
+  --patience "${patience}" \
 
 fi
 

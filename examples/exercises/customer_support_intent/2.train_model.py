@@ -67,15 +67,21 @@ def get_args():
 
 
 class CollateFunction(object):
-    def __init__(self, tokenizer: BertTokenizer):
+    def __init__(self,
+                 tokenizer: BertTokenizer,
+                 text_field: str = "text",
+                 label_field: str = "label"
+                 ):
         self.tokenizer = tokenizer
+        self.text_field = text_field
+        self.label_field = label_field
 
     def __call__(self, batch: List[dict]):
         texts: List[str] = list()
         targets: List[int] = list()
         for example in batch:
-            text = example["text"]
-            label = example["label"]
+            text = example[self.text_field]
+            label = example[self.label_field]
             texts.append(text)
             targets.append(label)
 
@@ -123,6 +129,8 @@ def main():
 
     collate_fn = CollateFunction(
         tokenizer=tokenizer,
+        text_field="utterance",
+        label_field="intent"
     )
 
     train_dataloader = DataLoader(
