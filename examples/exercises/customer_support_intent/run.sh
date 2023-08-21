@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# nohup sh run.sh --system_version centos --stage 1 --stop_stage 2 &
+# nohup sh run.sh --stage -1 --stop_stage 2 --system_version centos &
 
 # sh run.sh --system_version windows --stage -1 --stop_stage -1
 
