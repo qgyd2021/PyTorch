@@ -22,6 +22,7 @@ from datasets import load_dataset
 import numpy as np
 import torch
 import torch.distributed as dist
+from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
@@ -32,6 +33,7 @@ from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
 from transformers.models.bert.tokenization_bert import BertTokenizer
+from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
 
 from project_settings import project_path
 from toolbox.torch.modules.loss import FocalLoss
@@ -54,10 +56,10 @@ def get_args():
     parser.add_argument("--max_seq_length", default=1024, type=int)
     parser.add_argument("--max_cache_samples_count", default=1024, type=int)
 
-    parser.add_argument("--learning_rate", default=1e-3, type=float)
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--learning_rate", default=2e-5, type=float)
+    parser.add_argument("--epochs", default=1, type=int)
     parser.add_argument("--batch_size", default=8, type=int)
-    parser.add_argument("--keep_most_recent_by_count", default=10, type=int)
+    parser.add_argument("--keep_most_recent_by_count", default=3, type=int)
     parser.add_argument("--patience", default=-1, type=int)
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
 
@@ -175,56 +177,13 @@ class CollateFunction(object):
                 continue
 
             for k, v in example.items():
-                batch_[k].append(v[:-1])
-            batch_["labels"] = example["input_ids"][1:]
+                batch_[k].append(v)
+            batch_["labels"].append(example["input_ids"])
 
         result = dict()
         for k, v in batch_.items():
             result[k] = torch.tensor(data=v, dtype=torch.long)
         return result
-
-
-def train(args, model, rank, world_size, train_loader, optimizer, epoch, sampler=None):
-    model.train()
-    ddp_loss = torch.zeros(2).to(rank)
-    if sampler:
-        sampler.set_epoch(epoch)
-
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(rank), target.to(rank)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = F.nll_loss(output, target, reduction="sum")
-        loss.backward()
-        optimizer.step()
-        ddp_loss[0] += loss.item()
-        ddp_loss[1] += len(data)
-
-    dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
-    if rank == 0:
-        print("Train Epoch: {} \tLoss: {:.6f}".format(epoch, ddp_loss[0] / ddp_loss[1]))
-
-
-def test(model, rank, world_size, test_loader):
-    model.eval()
-    correct = 0
-    ddp_loss = torch.zeros(3).to(rank)
-    with torch.no_grad():
-        for data, target in test_loader:
-            data, target = data.to(rank), target.to(rank)
-            output = model(data)
-            ddp_loss[0] += F.nll_loss(output, target, reduction="sum").item()
-            pred = output.argmax(dim=1, keepdim=True)
-            ddp_loss[1] += pred.eq(target.view_as(pred)).sum().item()
-            ddp_loss[2] += len(data)
-
-    dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
-
-    if rank == 0:
-        test_loss = ddp_loss[0] / ddp_loss[2]
-        print("Test set: Average loss: {:.4f}, Accuracy: {}/{} ({:.2f}%)\n".format(
-            test_loss, int(ddp_loss[1]), int(ddp_loss[2]),
-            100. * ddp_loss[1] / ddp_loss[2]))
 
 
 def main():
@@ -242,12 +201,11 @@ def main():
     torch.manual_seed(args.seed)
 
     device = torch.device("{}:{}".format(args.device, args.rank))
+    torch.cuda.set_device(device)
     n_gpu = torch.cuda.device_count()
 
-    # model
+    # tokenizer
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_name_or_path)
-    model = GPT2LMHeadModel.from_pretrained(args.pretrained_model_name_or_path)
-    model.to(device)
 
     # dataset
     train_dataset = TextGenerationJsonDataset()
@@ -279,12 +237,113 @@ def main():
         drop_last=True
     )
 
+    init_start_event = torch.cuda.Event(enable_timing=True)
+    init_end_event = torch.cuda.Event(enable_timing=True)
+
     # train
-    for batch in train_dataloader:
-        for k, v in batch.items():
-            batch[k] = v.to(device)
-        outputs = model.forward(**batch)
-        print(outputs)
+    model = GPT2LMHeadModel.from_pretrained(args.pretrained_model_name_or_path)
+    model.to(device)
+    model = FSDP(model)
+
+    optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
+    lr_scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    init_start_event.record()
+
+    model_state_filename_list = list()
+    training_state_filename_list = list()
+
+    for epoch_idx in range(args.epochs):
+        # train
+        model.train()
+        ddp_loss = torch.zeros(2).to(device)
+        progress_bar = tqdm(train_dataloader, desc='Epoch={} (train)'.format(epoch_idx), leave=True)
+        for step, batch in enumerate(progress_bar):
+            for k, v in batch.items():
+                batch[k] = v.to(device)
+
+            outputs: CausalLMOutputWithCrossAttentions = model.forward(**batch)
+            loss = outputs.loss
+
+            loss.backward()
+
+            optimizer.step()
+            optimizer.zero_grad()
+
+            ddp_loss[0] += loss.item()
+            ddp_loss[1] += 1
+
+            # progress_bar
+            progress_bar_postfix = {
+                "loss": ddp_loss[0] / ddp_loss[1],
+            }
+            progress_bar.set_postfix(**progress_bar_postfix)
+
+        dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
+        training_loss: float = ddp_loss[0] / ddp_loss[1]
+        if args.rank == 0:
+            print("Train Epoch: {} \tLoss: {:.6f}".format(epoch_idx, ddp_loss[0] / ddp_loss[1]))
+
+        # validation
+        model.eval()
+        ddp_loss = torch.zeros(2).to(device)
+        progress_bar = tqdm(valid_dataloader, desc='Epoch={} (valid)'.format(epoch_idx), leave=True)
+        with torch.no_grad():
+            for step, batch in enumerate(progress_bar):
+                for k, v in batch.items():
+                    batch[k] = v.to(device)
+
+                outputs: CausalLMOutputWithCrossAttentions = model.forward(**batch)
+                loss = outputs.loss
+
+                ddp_loss[0] += loss.item()
+                ddp_loss[1] += 1
+
+                # progress_bar
+                progress_bar_postfix = {
+                    "loss": ddp_loss[0] / ddp_loss[1],
+                }
+                progress_bar.set_postfix(**progress_bar_postfix)
+        dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
+        validation_loss: float = ddp_loss[0] / ddp_loss[1]
+        if args.rank == 0:
+            print("Valid Epoch: {} \tLoss: {:.6f}".format(epoch_idx, ddp_loss[0] / ddp_loss[1]))
+
+        # lr scheduler
+        lr_scheduler.step()
+
+        # serialization
+        serialization_dir = Path(args.serialization_dir)
+        serialization_dir.mkdir(exist_ok=True)
+
+        # keep most recent by count
+        if len(model_state_filename_list) >= args.keep_most_recent_by_count > 0:
+            model_state_filename_ = model_state_filename_list.pop(0)
+            os.remove(model_state_filename_)
+            training_state_filename_ = training_state_filename_list.pop(0)
+            os.remove(training_state_filename_)
+
+        model_state_filename = serialization_dir / "model_state_{}.th".format(epoch_idx)
+        training_state_filename = serialization_dir / "training_state_{}.th".format(epoch_idx)
+        model_state_filename_list.append(model_state_filename.as_posix())
+        with open(model_state_filename.as_posix(), "wb") as f:
+            torch.save(model.state_dict(), f)
+        training_state_filename_list.append(training_state_filename.as_posix())
+        with open(training_state_filename.as_posix(), "wb") as f:
+            torch.save(optimizer.state_dict(), f)
+
+        # metrics epoch
+        metrics = {
+            "epoch": epoch_idx,
+            "training_loss": training_loss,
+            "validation_loss": validation_loss,
+            "lr": lr_scheduler.get_lr()
+        }
+        metrics_epoch_filename = serialization_dir / "metrics_epoch_{}.json".format(epoch_idx)
+        with open(metrics_epoch_filename, "w", encoding="utf-8") as f:
+            json.dump(metrics, f, indent=4, ensure_ascii=False)
+
+    init_end_event.record()
+
     # dist
     distribute_cleanup()
     return
