@@ -141,8 +141,6 @@ class GroupTextDataset(IterableDataset):
         if self.cache_samples_count > 0:
             sample = self.cache_samples.pop()
             self.cache_samples_count -= 1
-            if sample is None:
-                print(sample)
             return sample
         else:
             while True:
@@ -261,7 +259,7 @@ def main():
         train_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0 if platform.system() == "Windows" else os.cpu_count() // 2,
+        num_workers=0,
         collate_fn=collate_fn,
         pin_memory=False,
         drop_last=True
@@ -270,7 +268,7 @@ def main():
         valid_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        num_workers=0 if platform.system() == "Windows" else os.cpu_count() // 2,
+        num_workers=0,
         collate_fn=collate_fn,
         pin_memory=False,
         drop_last=True
@@ -279,6 +277,7 @@ def main():
     # train
     for batch in train_dataloader:
         print(batch)
+        exit(0)
         outputs = model.forward(**batch)
         print(outputs)
         exit(0)
