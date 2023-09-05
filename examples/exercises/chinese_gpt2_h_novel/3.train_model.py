@@ -141,7 +141,6 @@ class GroupTextDataset(IterableDataset):
         if self.cache_samples_count > 0:
             sample = self.cache_samples.pop()
             self.cache_samples_count -= 1
-            print(sample)
             return sample
         else:
             while True:
@@ -170,6 +169,7 @@ class CollateFunction(object):
     def __call__(self, batch: List[dict]):
         batch_ = defaultdict(list)
         for example in batch:
+            print(example)
             for k, v in example.items():
                 batch_[k].append(v[:-1])
             batch_["labels"] = example["input_ids"][1:]
