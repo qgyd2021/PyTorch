@@ -277,10 +277,8 @@ def main():
     # train
     for batch in train_dataloader:
         print(batch)
-        exit(0)
         outputs = model.forward(**batch)
         print(outputs)
-        exit(0)
     # dist
     distribute_cleanup()
     return
