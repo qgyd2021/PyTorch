@@ -281,7 +281,8 @@ def main():
 
     # train
     for batch in train_dataloader:
-        print(batch)
+        for k, v in batch.items():
+            batch[k] = v.to(device)
         outputs = model.forward(**batch)
         print(outputs)
     # dist
