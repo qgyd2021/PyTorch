@@ -246,7 +246,11 @@ def main():
     model = FSDP(model)
 
     optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
-    lr_scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
+    lr_scheduler = StepLR(
+        optimizer=optimizer,
+        step_size=args.lr_scheduler_step_size,
+        gamma=args.lr_scheduler_gamma
+    )
     init_start_event.record()
 
     model_state_filename_list = list()
