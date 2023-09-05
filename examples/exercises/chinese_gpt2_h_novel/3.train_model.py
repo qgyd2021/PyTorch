@@ -71,7 +71,7 @@ def get_args():
 
     parser.add_argument("--rank", default=0, type=int)
     parser.add_argument("--world_size", default=1, type=int)
-    parser.add_argument("--ddp_backend", default="gloo", type=str)
+    parser.add_argument("--ddp_backend", default="nccl" if torch.cuda.is_available() else "gloo", type=str)
     parser.add_argument("--ddp_timeout", default=1800, type=int)
 
     args = parser.parse_args()
