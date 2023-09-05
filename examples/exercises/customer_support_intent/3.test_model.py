@@ -105,8 +105,8 @@ def main():
     model.eval()
 
     example = {
-        "text": args.text,
-        "label": 0
+        "utterance": args.text,
+        "intent": "unknown"
     }
 
     inputs, targets = collate_fn.__call__([example])
