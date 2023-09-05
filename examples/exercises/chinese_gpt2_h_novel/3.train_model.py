@@ -56,7 +56,7 @@ def get_args():
 
     parser.add_argument("--learning_rate", default=1e-3, type=float)
     parser.add_argument("--epochs", default=200, type=int)
-    parser.add_argument("--batch_size", default=64, type=int)
+    parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument("--keep_most_recent_by_count", default=10, type=int)
     parser.add_argument("--patience", default=-1, type=int)
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
