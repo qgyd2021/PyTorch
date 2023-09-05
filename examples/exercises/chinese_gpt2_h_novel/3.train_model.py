@@ -51,6 +51,7 @@ def get_args():
     )
 
     parser.add_argument("--max_seq_length", default=1024, type=int)
+    parser.add_argument("--max_cache_samples_count", default=1024, type=int)
 
     parser.add_argument("--learning_rate", default=1e-3, type=float)
     parser.add_argument("--epochs", default=200, type=int)
@@ -246,10 +247,10 @@ def main():
     # dataset
     train_dataset = TextGenerationJsonDataset()
     train_dataset.read(args.train_subset)
-    train_dataset = GroupTextDataset(train_dataset, tokenizer, args.max_seq_length)
+    train_dataset = GroupTextDataset(train_dataset, tokenizer, args.max_seq_length, args.max_cache_samples_count)
     valid_dataset = TextGenerationJsonDataset()
     valid_dataset.read(args.valid_subset)
-    valid_dataset = GroupTextDataset(valid_dataset, tokenizer, args.max_seq_length)
+    valid_dataset = GroupTextDataset(valid_dataset, tokenizer, args.max_seq_length, args.max_cache_samples_count)
 
     collate_fn = CollateFunction()
 
