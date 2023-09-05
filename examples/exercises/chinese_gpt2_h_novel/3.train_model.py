@@ -5,6 +5,7 @@ https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html
 """
 import argparse
 from collections import defaultdict
+import copy
 from datetime import timedelta
 import json
 import os
@@ -161,6 +162,7 @@ class GroupTextDataset(IterableDataset):
                     self.cache_samples.append(sample)
                     self.cache_samples_count += 1
                 if self.cache_samples_count >= self.max_cache_samples_count:
+                    random.shuffle(self.cache_samples)
                     break
 
 
@@ -169,6 +171,9 @@ class CollateFunction(object):
     def __call__(self, batch: List[dict]):
         batch_ = defaultdict(list)
         for example in batch:
+            if example is None:
+                continue
+
             for k, v in example.items():
                 batch_[k].append(v[:-1])
             batch_["labels"] = example["input_ids"][1:]
