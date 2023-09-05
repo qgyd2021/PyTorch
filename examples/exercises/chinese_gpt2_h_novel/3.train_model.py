@@ -278,14 +278,14 @@ def main():
 
             # progress_bar
             progress_bar_postfix = {
-                "loss": ddp_loss[0] / ddp_loss[1],
+                "loss": float(ddp_loss[0] / ddp_loss[1]),
             }
             progress_bar.set_postfix(**progress_bar_postfix)
 
         dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
         training_loss: float = ddp_loss[0] / ddp_loss[1]
         if args.rank == 0:
-            print("Train Epoch: {} \tLoss: {:.6f}".format(epoch_idx, ddp_loss[0] / ddp_loss[1]))
+            print("Train Epoch: {} \tLoss: {:.6f}".format(epoch_idx, float(ddp_loss[0] / ddp_loss[1])))
 
         # validation
         model.eval()
@@ -304,13 +304,13 @@ def main():
 
                 # progress_bar
                 progress_bar_postfix = {
-                    "loss": ddp_loss[0] / ddp_loss[1],
+                    "loss": float(ddp_loss[0] / ddp_loss[1]),
                 }
                 progress_bar.set_postfix(**progress_bar_postfix)
         dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
         validation_loss: float = ddp_loss[0] / ddp_loss[1]
         if args.rank == 0:
-            print("Valid Epoch: {} \tLoss: {:.6f}".format(epoch_idx, ddp_loss[0] / ddp_loss[1]))
+            print("Valid Epoch: {} \tLoss: {:.6f}".format(epoch_idx, float(ddp_loss[0] / ddp_loss[1])))
 
         # lr scheduler
         lr_scheduler.step()
