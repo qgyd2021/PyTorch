@@ -169,7 +169,6 @@ class CollateFunction(object):
     def __call__(self, batch: List[dict]):
         batch_ = defaultdict(list)
         for example in batch:
-            print(example)
             for k, v in example.items():
                 batch_[k].append(v[:-1])
             batch_["labels"] = example["input_ids"][1:]
