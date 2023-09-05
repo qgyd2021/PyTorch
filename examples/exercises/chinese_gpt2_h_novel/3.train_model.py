@@ -141,6 +141,7 @@ class GroupTextDataset(IterableDataset):
         if self.cache_samples_count > 0:
             sample = self.cache_samples.pop()
             self.cache_samples_count -= 1
+            print(sample)
             return sample
         else:
             while True:
@@ -252,9 +253,6 @@ def main():
     valid_dataset.read(args.valid_subset)
     valid_dataset = GroupTextDataset(valid_dataset, tokenizer, args.max_seq_length, args.max_cache_samples_count)
 
-    for sample in train_dataset:
-        print(sample)
-    exit(0)
     collate_fn = CollateFunction()
 
     # dataloader
