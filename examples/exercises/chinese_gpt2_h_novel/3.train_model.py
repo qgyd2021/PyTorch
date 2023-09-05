@@ -245,7 +245,7 @@ def main():
     model.to(device)
     model = FSDP(model)
 
-    optimizer = torch.optim.Adadelta(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
     lr_scheduler = StepLR(optimizer, step_size=1, gamma=args.gamma)
     init_start_event.record()
 
