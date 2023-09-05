@@ -11,7 +11,11 @@ import os
 from pathlib import Path
 import platform
 import random
+import sys
 from typing import Callable, List
+
+pwd = os.path.abspath(os.path.dirname(__file__))
+sys.path.append(os.path.join(pwd, '../../../'))
 
 from datasets import load_dataset
 import numpy as np
