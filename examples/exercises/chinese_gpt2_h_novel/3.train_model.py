@@ -6,6 +6,7 @@ https://pytorch.org/tutorials/intermediate/FSDP_tutorial.html
 import argparse
 from collections import defaultdict
 import copy
+from dataclasses import asdict, dataclass, field, fields
 from datetime import timedelta
 import json
 import os
@@ -13,7 +14,7 @@ from pathlib import Path
 import platform
 import random
 import sys
-from typing import Callable, List
+from typing import Any, Callable, Dict, Iterable, List, Union
 
 pwd = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(pwd, '../../../'))
@@ -34,6 +35,7 @@ from tqdm import tqdm
 from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
 from transformers.models.bert.tokenization_bert import BertTokenizer
 from transformers.modeling_outputs import CausalLMOutputWithCrossAttentions
+from transformers.modeling_utils import PreTrainedModel
 
 from project_settings import project_path
 from toolbox.torch.modules.loss import FocalLoss
@@ -186,6 +188,127 @@ class CollateFunction(object):
         return result
 
 
+@dataclass
+class TrainingArguments(object):
+    serialization_dir: str = field(
+        metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
+    )
+    num_train_epochs: int = field(default=3, metadata={"help": "Total number of training epochs to perform."})
+    seed: int = field(default=42, metadata={"help": "Random seed that will be set at the beginning of training."})
+    keep_most_recent_by_count: int = field(default=10, metadata={"help": "how many checkpoint to keep."})
+
+
+@dataclass
+class TrainerState(object):
+    epoch_idx: int = 0
+    global_step: int = 0
+
+    best_epoch: int = -1
+    best_validation_loss: float = float("inf")
+
+    training_loss: float = float("inf")
+    validation_loss: float = float("inf")
+
+
+class Trainer(object):
+    def __init__(self,
+                 model: PreTrainedModel,
+                 args: TrainingArguments,
+                 train_dataloader: DataLoader,
+                 valid_dataloader: DataLoader,
+                 optimizer: torch.optim.Optimizer,
+                 lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+                 device=None
+                 ):
+        self.model = model
+        self.args = args
+        self.train_dataloader = train_dataloader
+        self.valid_dataloader = valid_dataloader
+
+        self.optimizer = optimizer
+        self.lr_scheduler = lr_scheduler
+
+        # save checkpoint
+        self.model_state_filename_list = list()
+        self.training_state_filename_list = list()
+
+        self.serialization_dir = Path(args.serialization_dir)
+        self.serialization_dir.mkdir(exist_ok=True)
+
+        self.device = device
+
+        # global params
+        self.state: TrainerState = None
+
+    def _prepare_input(self, data: Union[torch.Tensor, Any]) -> Union[torch.Tensor, Any]:
+        if isinstance(data, dict):
+            return dict({k: self._prepare_input(v) for k, v in data.items()})
+        elif isinstance(data, list):
+            return list(self._prepare_input(v) for v in data)
+        elif isinstance(data, tuple):
+            return tuple(self._prepare_input(v) for v in data)
+        elif isinstance(data, torch.Tensor):
+            return data.to(self.device)
+        return data
+
+    def _prepare_inputs(self, inputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
+        inputs = self._prepare_input(inputs)
+        return inputs
+
+    def train(self):
+        self.model.to(self.device)
+
+        self.state = TrainerState()
+
+        for epoch_idx in range(self.args.num_train_epochs):
+            self.state.epoch_idx = epoch_idx
+
+            self.training_epoch(epoch_idx)
+        return
+
+    def training_epoch(self, epoch_idx: int):
+        # train
+        training_total_loss: float = 0.0
+        training_total_steps: int = 0
+
+        self.model.train()
+        progress_bar = tqdm(self.train_dataloader, desc='Epoch={} (train)'.format(epoch_idx), leave=True)
+        for step, batch in enumerate(progress_bar):
+            inputs, targets = batch
+            loss, _ = self.training_step(inputs, targets)
+
+            training_total_loss += loss.item()
+            training_total_steps += 1
+
+            # progress_bar
+            progress_bar_postfix = {
+                "loss": training_total_loss / training_total_steps,
+            }
+            progress_bar.set_postfix(**progress_bar_postfix)
+
+        training_loss: float = training_total_loss / training_total_steps
+        self.state.training_loss = training_loss
+
+    def training_step(self,
+                      inputs: Dict[str, torch.Tensor],
+                      targets: torch.Tensor
+                      ) -> torch.Tensor:
+        inputs = self._prepare_inputs(inputs)
+        targets = targets.to(self.device)
+
+        logits = self.model.forward(**inputs)
+
+        loss = self.loss_fn(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
+
+        loss.backward()
+
+        self.optimizer.step()
+        self.optimizer.zero_grad()
+        self.lr_scheduler.step()
+
+        return loss, logits
+
+
 def main():
     args = get_args()
 
@@ -253,98 +376,22 @@ def main():
     )
     init_start_event.record()
 
-    model_state_filename_list = list()
-    training_state_filename_list = list()
-
-    for epoch_idx in range(args.epochs):
-        # train
-        model.train()
-        ddp_loss = torch.zeros(2).to(device)
-        progress_bar = tqdm(train_dataloader, desc='Epoch={} (train)'.format(epoch_idx), leave=True)
-        for step, batch in enumerate(progress_bar):
-            for k, v in batch.items():
-                batch[k] = v.to(device)
-
-            outputs: CausalLMOutputWithCrossAttentions = model.forward(**batch)
-            loss = outputs.loss
-
-            loss.backward()
-
-            optimizer.step()
-            optimizer.zero_grad()
-
-            ddp_loss[0] += loss.item()
-            ddp_loss[1] += 1
-
-            # progress_bar
-            progress_bar_postfix = {
-                "loss": float(ddp_loss[0] / ddp_loss[1]),
-            }
-            progress_bar.set_postfix(**progress_bar_postfix)
-
-        dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
-        training_loss: float = ddp_loss[0] / ddp_loss[1]
-        if args.rank == 0:
-            print("Train Epoch: {} \tLoss: {:.6f}".format(epoch_idx, float(ddp_loss[0] / ddp_loss[1])))
-
-        # validation
-        model.eval()
-        ddp_loss = torch.zeros(2).to(device)
-        progress_bar = tqdm(valid_dataloader, desc='Epoch={} (valid)'.format(epoch_idx), leave=True)
-        with torch.no_grad():
-            for step, batch in enumerate(progress_bar):
-                for k, v in batch.items():
-                    batch[k] = v.to(device)
-
-                outputs: CausalLMOutputWithCrossAttentions = model.forward(**batch)
-                loss = outputs.loss
-
-                ddp_loss[0] += loss.item()
-                ddp_loss[1] += 1
-
-                # progress_bar
-                progress_bar_postfix = {
-                    "loss": float(ddp_loss[0] / ddp_loss[1]),
-                }
-                progress_bar.set_postfix(**progress_bar_postfix)
-        dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
-        validation_loss: float = ddp_loss[0] / ddp_loss[1]
-        if args.rank == 0:
-            print("Valid Epoch: {} \tLoss: {:.6f}".format(epoch_idx, float(ddp_loss[0] / ddp_loss[1])))
-
-        # lr scheduler
-        lr_scheduler.step()
-
-        # serialization
-        serialization_dir = Path(args.serialization_dir)
-        serialization_dir.mkdir(exist_ok=True)
-
-        # keep most recent by count
-        if len(model_state_filename_list) >= args.keep_most_recent_by_count > 0:
-            model_state_filename_ = model_state_filename_list.pop(0)
-            os.remove(model_state_filename_)
-            training_state_filename_ = training_state_filename_list.pop(0)
-            os.remove(training_state_filename_)
-
-        model_state_filename = serialization_dir / "model_state_{}.th".format(epoch_idx)
-        training_state_filename = serialization_dir / "training_state_{}.th".format(epoch_idx)
-        model_state_filename_list.append(model_state_filename.as_posix())
-        with open(model_state_filename.as_posix(), "wb") as f:
-            torch.save(model.state_dict(), f)
-        training_state_filename_list.append(training_state_filename.as_posix())
-        with open(training_state_filename.as_posix(), "wb") as f:
-            torch.save(optimizer.state_dict(), f)
-
-        # metrics epoch
-        metrics = {
-            "epoch": epoch_idx,
-            "training_loss": training_loss,
-            "validation_loss": validation_loss,
-            "lr": lr_scheduler.get_lr()
-        }
-        metrics_epoch_filename = serialization_dir / "metrics_epoch_{}.json".format(epoch_idx)
-        with open(metrics_epoch_filename, "w", encoding="utf-8") as f:
-            json.dump(metrics, f, indent=4, ensure_ascii=False)
+    training_args = TrainingArguments(
+        serialization_dir=args.serialization_dir,
+        num_train_epochs=args.num_train_epochs,
+        seed=args.seed,
+        keep_most_recent_by_count=args.keep_most_recent_by_count,
+    )
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataloader=train_dataloader,
+        valid_dataloader=valid_dataloader,
+        optimizer=optimizer,
+        lr_scheduler=lr_scheduler,
+        device=device,
+    )
+    trainer.train()
 
     init_end_event.record()
 
