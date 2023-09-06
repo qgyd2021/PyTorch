@@ -309,7 +309,7 @@ class Trainer(object):
 
             # save
             if self.state.global_step % self.args.save_steps == 0:
-                self._save(self.output_dir)
+                self._save(self.output_dir / "checkpoint-{}".format(self.state.global_step))
 
         dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
         # progress_bar
