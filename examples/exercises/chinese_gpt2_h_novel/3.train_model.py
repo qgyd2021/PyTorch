@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import platform
 import random
+import shutil
 import sys
 from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
@@ -250,8 +251,7 @@ class Trainer(object):
         self.lr_scheduler = lr_scheduler
 
         # save checkpoint
-        self.model_state_filename_list = list()
-        self.training_state_filename_list = list()
+        self.checkpoint_path_list = list()
 
         self.output_dir = Path(args.output_dir)
         self.output_dir.mkdir(exist_ok=True)
@@ -308,8 +308,9 @@ class Trainer(object):
             progress_bar.set_postfix(**progress_bar_postfix)
 
             # save
+            dist.barrier()
             if self.state.global_step % self.args.save_steps == 0:
-                self._save(self.output_dir / "checkpoint-{}".format(self.state.global_step))
+                self.save()
 
         dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
         # progress_bar
@@ -333,6 +334,15 @@ class Trainer(object):
         self.lr_scheduler.step()
 
         return loss, outputs
+
+    def save(self):
+        this_checkpoint_path = self.output_dir / "checkpoint-{}".format(self.state.global_step)
+        self.checkpoint_path_list.append(this_checkpoint_path)
+        if len(self.checkpoint_path_list) > self.args.keep_most_recent_by_count:
+            for checkpoint_path in self.checkpoint_path_list[:-self.args.keep_most_recent_by_count]:
+                shutil.rmtree(checkpoint_path)
+            self.checkpoint_path_list = self.checkpoint_path_list[-self.args.keep_most_recent_by_count:]
+        self._save(this_checkpoint_path)
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         output_dir = output_dir if output_dir is not None else self.output_dir
