@@ -59,7 +59,7 @@ def get_args():
     parser.add_argument("--max_cache_samples_count", default=1024, type=int)
 
     parser.add_argument("--learning_rate", default=2e-5, type=float)
-    parser.add_argument("--epochs", default=1, type=int)
+    parser.add_argument("--num_train_epochs", default=1, type=int)
     parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument("--keep_most_recent_by_count", default=3, type=int)
     parser.add_argument("--patience", default=-1, type=int)
@@ -274,8 +274,8 @@ class Trainer(object):
         self.model.train()
         progress_bar = tqdm(self.train_dataloader, desc='Epoch={} (train)'.format(epoch_idx), leave=True)
         for step, batch in enumerate(progress_bar):
-            inputs, targets = batch
-            loss, _ = self.training_step(inputs, targets)
+            batch = self._prepare_inputs(batch)
+            loss, _ = self.training_step(batch)
 
             training_total_loss += loss.item()
             training_total_steps += 1
@@ -290,15 +290,10 @@ class Trainer(object):
         self.state.training_loss = training_loss
 
     def training_step(self,
-                      inputs: Dict[str, torch.Tensor],
-                      targets: torch.Tensor
+                      batch: Dict[str, torch.Tensor],
                       ) -> torch.Tensor:
-        inputs = self._prepare_inputs(inputs)
-        targets = targets.to(self.device)
-
-        logits = self.model.forward(**inputs)
-
-        loss = self.loss_fn(logits.reshape(-1, logits.shape[-1]), targets.reshape(-1))
+        outputs = self.model.forward(**batch)
+        loss = outputs.loss
 
         loss.backward()
 
@@ -306,7 +301,7 @@ class Trainer(object):
         self.optimizer.zero_grad()
         self.lr_scheduler.step()
 
-        return loss, logits
+        return loss, outputs
 
 
 def main():
@@ -324,7 +319,8 @@ def main():
     torch.manual_seed(args.seed)
 
     device = torch.device("{}:{}".format(args.device, args.rank))
-    torch.cuda.set_device(device)
+    if args.device == "cuda":
+        torch.cuda.set_device(device)
     n_gpu = torch.cuda.device_count()
 
     # tokenizer
@@ -360,13 +356,13 @@ def main():
         drop_last=True
     )
 
-    init_start_event = torch.cuda.Event(enable_timing=True)
-    init_end_event = torch.cuda.Event(enable_timing=True)
+    # init_start_event = torch.cuda.Event(enable_timing=True)
+    # init_end_event = torch.cuda.Event(enable_timing=True)
 
     # train
     model = GPT2LMHeadModel.from_pretrained(args.pretrained_model_name_or_path)
     model.to(device)
-    model = FSDP(model)
+    # model = FSDP(model)
 
     optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
     lr_scheduler = StepLR(
@@ -374,7 +370,7 @@ def main():
         step_size=args.lr_scheduler_step_size,
         gamma=args.lr_scheduler_gamma
     )
-    init_start_event.record()
+    # init_start_event.record()
 
     training_args = TrainingArguments(
         serialization_dir=args.serialization_dir,
@@ -393,7 +389,7 @@ def main():
     )
     trainer.train()
 
-    init_end_event.record()
+    # init_end_event.record()
 
     # dist
     distribute_cleanup()
