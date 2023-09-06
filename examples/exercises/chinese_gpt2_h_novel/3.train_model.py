@@ -414,7 +414,7 @@ def main():
     # init_start_event.record()
 
     training_args = TrainingArguments(
-        serialization_dir=args.serialization_dir,
+        output_dir=args.serialization_dir,
         num_train_epochs=args.num_train_epochs,
         seed=args.seed,
         keep_most_recent_by_count=args.keep_most_recent_by_count,
