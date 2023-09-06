@@ -217,7 +217,7 @@ class Trainer(object):
                  train_dataloader: DataLoader,
                  valid_dataloader: DataLoader,
                  optimizer: torch.optim.Optimizer,
-                 lr_scheduler: torch.optim.lr_scheduler.LRScheduler,
+                 lr_scheduler,
                  device=None
                  ):
         self.model = model
