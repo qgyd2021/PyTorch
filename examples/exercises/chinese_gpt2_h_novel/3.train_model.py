@@ -14,7 +14,7 @@ from pathlib import Path
 import platform
 import random
 import sys
-from typing import Any, Callable, Dict, Iterable, List, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Union
 
 pwd = os.path.abspath(os.path.dirname(__file__))
 sys.path.append(os.path.join(pwd, '../../../'))
@@ -190,10 +190,23 @@ class CollateFunction(object):
 
 @dataclass
 class TrainingArguments(object):
-    serialization_dir: str = field(
+    output_dir: str = field(
         metadata={"help": "The output directory where the model predictions and checkpoints will be written."},
     )
     num_train_epochs: int = field(default=3, metadata={"help": "Total number of training epochs to perform."})
+    max_steps: int = field(
+        default=-1,
+        metadata={"help": "If > 0: set total number of training steps to perform. Override num_train_epochs."},
+    )
+    save_steps: float = field(
+        default=500,
+        metadata={
+            "help": (
+                "Save checkpoint every X updates steps. Should be an integer or a float in range `[0,1)`."
+                "If smaller than 1, will be interpreted as ratio of total training steps."
+            )
+        },
+    )
     seed: int = field(default=42, metadata={"help": "Random seed that will be set at the beginning of training."})
     keep_most_recent_by_count: int = field(default=10, metadata={"help": "how many checkpoint to keep."})
 
@@ -208,6 +221,14 @@ class TrainerState(object):
 
     training_loss: float = float("inf")
     validation_loss: float = float("inf")
+
+
+# Name of the files used for checkpointing
+TRAINING_ARGS_NAME = "training_args.bin"
+TRAINER_STATE_NAME = "trainer_state.json"
+OPTIMIZER_NAME = "optimizer.pt"
+SCHEDULER_NAME = "scheduler.pt"
+SCALER_NAME = "scaler.pt"
 
 
 class Trainer(object):
@@ -232,8 +253,8 @@ class Trainer(object):
         self.model_state_filename_list = list()
         self.training_state_filename_list = list()
 
-        self.serialization_dir = Path(args.serialization_dir)
-        self.serialization_dir.mkdir(exist_ok=True)
+        self.output_dir = Path(args.output_dir)
+        self.output_dir.mkdir(exist_ok=True)
 
         self.device = device
 
@@ -262,31 +283,41 @@ class Trainer(object):
 
         for epoch_idx in range(self.args.num_train_epochs):
             self.state.epoch_idx = epoch_idx
-
             self.training_epoch(epoch_idx)
         return
 
     def training_epoch(self, epoch_idx: int):
         # train
-        training_total_loss: float = 0.0
-        training_total_steps: int = 0
+        ddp_loss = torch.zeros(2).to(self.device)
 
         self.model.train()
         progress_bar = tqdm(self.train_dataloader, desc='Epoch={} (train)'.format(epoch_idx), leave=True)
         for step, batch in enumerate(progress_bar):
             batch = self._prepare_inputs(batch)
             loss, _ = self.training_step(batch)
+            self.state.global_step += 1
 
-            training_total_loss += loss.item()
-            training_total_steps += 1
+            ddp_loss[0] += loss.item()
+            ddp_loss[1] += 1
 
             # progress_bar
+            training_loss: float = float(ddp_loss[0] / ddp_loss[1])
             progress_bar_postfix = {
-                "loss": training_total_loss / training_total_steps,
+                "loss": training_loss,
             }
             progress_bar.set_postfix(**progress_bar_postfix)
 
-        training_loss: float = training_total_loss / training_total_steps
+            # save
+            if self.state.global_step % self.args.save_steps == 0:
+                self._save(self.output_dir)
+
+        dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
+        # progress_bar
+        training_loss: float = float(ddp_loss[0] / ddp_loss[1])
+        progress_bar_postfix = {
+            "loss": training_loss,
+        }
+        progress_bar.set_postfix(**progress_bar_postfix)
         self.state.training_loss = training_loss
 
     def training_step(self,
@@ -302,6 +333,16 @@ class Trainer(object):
         self.lr_scheduler.step()
 
         return loss, outputs
+
+    def _save(self, output_dir: Optional[str] = None, state_dict=None):
+        output_dir = output_dir if output_dir is not None else self.output_dir
+        os.makedirs(output_dir, exist_ok=True)
+
+        self.model.save_pretrained(
+            output_dir, state_dict=state_dict, safe_serialization=False
+        )
+        torch.save(self.args, os.path.join(output_dir, TRAINING_ARGS_NAME))
+        return
 
 
 def main():
