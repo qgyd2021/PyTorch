@@ -431,12 +431,11 @@ def main():
 
     lr_scheduler = CosineAnnealingWarmRestarts(
         optimizer=optimizer,
-        T_0=args.T_0,
-        T_mult=args.T_mult,
-        eta_min=args.eta_min,
-        last_epoch=args.last_epoch,
-        verbose=args.verbose,
-
+        T_0=args.lr_scheduler_t_0,
+        T_mult=args.lr_scheduler_t_mult,
+        eta_min=args.lr_scheduler_eta_min,
+        last_epoch=args.lr_scheduler_last_epoch,
+        verbose=args.lr_scheduler_verbose,
     )
 
     # init_start_event.record()
