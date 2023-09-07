@@ -28,7 +28,7 @@ from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 import torch.multiprocessing as mp
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel
-from torch.optim.lr_scheduler import StepLR
+from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset, IterableDataset
 from torch.utils.data.distributed import DistributedSampler
@@ -66,8 +66,15 @@ def get_args():
     parser.add_argument("--patience", default=-1, type=int)
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
 
-    parser.add_argument("--lr_scheduler_step_size", default=50, type=int)
+    # lr_scheduler StepLR
+    parser.add_argument("--lr_scheduler_step_size", default=5000, type=int)
     parser.add_argument("--lr_scheduler_gamma", default=0.5, type=float)
+    # lr_scheduler CosineAnnealingWarmRestarts
+    parser.add_argument("--lr_scheduler_t_0", default=1, type=int)
+    parser.add_argument("--lr_scheduler_t_mult", default=2, type=int)
+    parser.add_argument("--lr_scheduler_eta_min", default=0., type=float)
+    parser.add_argument("--lr_scheduler_last_epoch", default=-1, type=int)
+    parser.add_argument("--lr_scheduler_verbose", action="store_true")
 
     parser.add_argument("--seed", default=3407, type=str, help="https://arxiv.org/abs/2109.08203")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str)
@@ -416,11 +423,22 @@ def main():
     # model = FSDP(model)
 
     optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
-    lr_scheduler = StepLR(
+    # lr_scheduler = StepLR(
+    #     optimizer=optimizer,
+    #     step_size=args.lr_scheduler_step_size,
+    #     gamma=args.lr_scheduler_gamma
+    # )
+
+    lr_scheduler = CosineAnnealingWarmRestarts(
         optimizer=optimizer,
-        step_size=args.lr_scheduler_step_size,
-        gamma=args.lr_scheduler_gamma
+        T_0=args.T_0,
+        T_mult=args.T_mult,
+        eta_min=args.eta_min,
+        last_epoch=args.last_epoch,
+        verbose=args.verbose,
+
     )
+
     # init_start_event.record()
 
     training_args = TrainingArguments(
