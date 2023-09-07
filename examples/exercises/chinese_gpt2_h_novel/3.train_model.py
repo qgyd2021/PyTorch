@@ -420,7 +420,7 @@ def main():
     # train
     model = GPT2LMHeadModel.from_pretrained(args.pretrained_model_name_or_path)
     model.to(device)
-    # model = FSDP(model)
+    model = FSDP(model)
 
     optimizer = torch.optim.Adadelta(model.parameters(), lr=args.learning_rate)
     # lr_scheduler = StepLR(
