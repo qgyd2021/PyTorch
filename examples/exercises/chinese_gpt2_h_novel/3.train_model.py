@@ -317,7 +317,7 @@ class Trainer(object):
             # save
             dist.barrier()
             if self.state.global_step % self.args.save_steps == 0:
-                self.save()
+                self.save_model()
 
         dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
         # progress_bar
@@ -342,14 +342,16 @@ class Trainer(object):
 
         return loss, outputs
 
-    def save(self):
+    def save_model(self):
         this_checkpoint_path = self.output_dir / "checkpoint-{}".format(self.state.global_step)
         self.checkpoint_path_list.append(this_checkpoint_path)
         if len(self.checkpoint_path_list) > self.args.keep_most_recent_by_count:
             for checkpoint_path in self.checkpoint_path_list[:-self.args.keep_most_recent_by_count]:
                 shutil.rmtree(checkpoint_path)
             self.checkpoint_path_list = self.checkpoint_path_list[-self.args.keep_most_recent_by_count:]
-        self._save(this_checkpoint_path)
+
+        state_dict = self.model.state_dict()
+        self._save(this_checkpoint_path, state_dict=state_dict)
 
     def _save(self, output_dir: Optional[str] = None, state_dict=None):
         output_dir = output_dir if output_dir is not None else self.output_dir
