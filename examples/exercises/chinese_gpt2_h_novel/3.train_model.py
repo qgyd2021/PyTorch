@@ -8,6 +8,7 @@ from collections import defaultdict
 import copy
 from dataclasses import asdict, dataclass, field, fields
 from datetime import timedelta
+import functools
 import json
 import os
 from pathlib import Path
@@ -32,6 +33,11 @@ from torch.optim.lr_scheduler import StepLR, CosineAnnealingWarmRestarts
 from torch.utils.data.dataloader import DataLoader
 from torch.utils.data.dataset import Dataset, IterableDataset
 from torch.utils.data.distributed import DistributedSampler
+from torch.distributed.fsdp.wrap import (
+    size_based_auto_wrap_policy,
+    enable_wrap,
+    wrap,
+)
 from tqdm import tqdm
 from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
 from transformers.models.bert.tokenization_bert import BertTokenizer
@@ -59,7 +65,7 @@ def get_args():
     parser.add_argument("--max_seq_length", default=1024, type=int)
     parser.add_argument("--max_cache_samples_count", default=1024, type=int)
 
-    parser.add_argument("--learning_rate", default=2e-5, type=float)
+    parser.add_argument("--learning_rate", default=2e-3, type=float)
     parser.add_argument("--num_train_epochs", default=1, type=int)
     parser.add_argument("--batch_size", default=8, type=int)
     parser.add_argument("--keep_most_recent_by_count", default=3, type=int)
@@ -67,8 +73,8 @@ def get_args():
     parser.add_argument("--serialization_dir", default="serialization_dir", type=str)
 
     # lr_scheduler StepLR
-    parser.add_argument("--lr_scheduler_step_size", default=5000, type=int)
-    parser.add_argument("--lr_scheduler_gamma", default=0.5, type=float)
+    parser.add_argument("--lr_scheduler_step_size", default=50000, type=int)
+    parser.add_argument("--lr_scheduler_gamma", default=0.7, type=float)
     # lr_scheduler CosineAnnealingWarmRestarts
     parser.add_argument("--lr_scheduler_t_0", default=1, type=int)
     parser.add_argument("--lr_scheduler_t_mult", default=2, type=int)
@@ -317,7 +323,8 @@ class Trainer(object):
             # save
             dist.barrier()
             if self.state.global_step % self.args.save_steps == 0:
-                self.save_model()
+                if dist.get_rank() == 0:
+                    self.save_model()
 
         dist.all_reduce(ddp_loss, op=dist.ReduceOp.SUM)
         # progress_bar
